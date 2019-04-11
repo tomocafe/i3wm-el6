@@ -17,23 +17,6 @@ function check () {
     fi
 }
 
-function extracturl () {
-    local url
-    for url in $@; do
-        case $url in
-            *.rpm)
-                curl -sL $url | rpm2cpio | cpio -idv
-                ;;
-            *.tar.gz)
-                curl -sL $url | tar xzf - 
-                ;;
-            *.tar.bz2)
-                curl -sL $url | tar xjf -
-                ;;
-        esac
-    done
-}
-
 function getdeps () {
     local pkg dep
     for pkg in $@; do
@@ -50,14 +33,15 @@ function getdeps () {
 
 baserepo="http://mirror.centos.org/centos/6/os/$(uname -i)"
 epelrepo="https://dl.fedoraproject.org/pub/epel/6/$(uname -i)"
-corepkgs="coreutils pkgconfig libtool make patch pcre"
-basepkgs="pcre-devel xorg-x11-proto-devel xorg-x11-util-macros xcb-util-keysyms-devel xcb-util-wm-devel startup-notification-devel yajl2-devel xcb-util-cursor-devel xcb-util-renderutil-devel xcb-util-image-devel zlib-devel freetype-devel fontconfig-devel libpng-devel pixman-devel libconfuse-devel alsa-lib-devel wireless-tools-devel asciidoc"
-epelpkgs="libev-devel"
+corepkgs="coreutils pkgconfig libtool make patch"
+basepkgs="pcre-devel xorg-x11-util-macros xcb-util-keysyms-devel xcb-util-wm-devel startup-notification-devel alsa-lib-devel wireless-tools-devel asciidoc"
+# xorg-x11-proto-devel xcb-util-renderutil-devel xcb-util-image-devel
+epelpkgs="libev-devel libconfuse-devel"
 
 echo "Checking system and build setup..."
 
 # Check required helper commands
-for cmd in rpm repoquery curl rpm2cpio git ruby cmake; do
+for cmd in rpm repoquery curl rpm2cpio git; do
     check "command -v $cmd" "command $cmd not found"
 done
 
@@ -83,22 +67,11 @@ rootpath=$PWD
 srcpath=$(readlink -f $SRCDIR)
 prepath=$(readlink -f $PREFIX)
 
-# Check how many threads we can use
-threads=1
-maxthreads=4
-if command -v nproc &>/dev/null; then
-    threads=$(nproc)
-    [[ $threads -gt $maxthreads ]] && threads=$maxthreads
-fi
-if [[ $threads -gt 1 ]]; then
-    echo "Using $threads threads for compiling source"
-fi
-
 # Query dependencies of required packages recursively
 # Download rpm binaries of missing packages and extract them
 echo "Analyzing dependencies..."
-check "cd $PREFIX" \
-    "failed to enter PREFIX=$PREFIX directory"
+check "cd $prepath" \
+    "failed to enter PREFIX=$PREFIX directory ($prepath)"
 for pkg in $(getdeps $basepkgs); do
     pkgname=${pkg%%-[0-9]*}
     if ! rpm -q $pkgname &> /dev/null; then
@@ -114,77 +87,83 @@ for pkg in $(RQARGS="--repofrompath=epel,$epelrepo --repoid=epel" getdeps $epelp
     fi
 done
 # Always check out zlib, otherwise issues arise in cairo build
-pkg=$(repoquery --archlist=$(uname -i) --envra zlib)
-pkg=${pkg#*:} # strip out epoch
-echo "Fetching $pkg"
-check "curl -s $baserepo/Packages/$pkg.rpm | rpm2cpio | cpio -idv" \
-    "failed to download and extract zlib"
-check "cd $rootpath" \
-    "failed to re-enter the root directory $rootpath"
+#pkg=$(repoquery --archlist=$(uname -i) --envra zlib)
+#pkg=${pkg#*:} # strip out epoch
+#echo "Fetching $pkg"
+#check "curl -s $baserepo/Packages/$pkg.rpm | rpm2cpio | cpio -idv" \
+#    "failed to download and extract zlib"
 
 # Check out source (rpms are not readily available for these packages on el6)
 echo "Checking out source..."
-check "cd $SRCDIR" \
-    "failed to enter SRCDIR=$SRCDIR directory"
+check "cd $srcpath" \
+    "failed to enter SRCDIR=$SRCDIR directory ($srcpath)"
 
 #function mt_checkout () {
 #    echo "Checking out $1"
-#    check "git clone $2" "failed to clone $1"
+#    git clone --branch $2 $3
 #}
 #export -f mt_checkout
 #
 #echo \
-#    "xcb-util-cursor" "http://anongit.freedesktop.org/git/xcb/util-cursor.git --recursive" \
-#    "yajl"            "https://github.com/lloyd/yajl.git" \
-#    "cairo"           "http://anongit.freedesktop.org/git/cairo" \
-#    "pango"           "https://github.com/GNOME/pango.git" \
-#    "i3"              "https://github.com/i3/i3.git" \
-#    "i3status"        "https://github.com/i3/i3status.git" \
-#    | xargs -n2 -P$threads mt_checkout
+#    "xcb-util-cursor" "0.1.0"  "http://anongit.freedesktop.org/git/xcb/util-cursor.git" \
+#    "yajl"            "2.0.4"  "https://github.com/lloyd/yajl.git" \
+#    #"cairo"          "1.12.4" "http://anongit.freedesktop.org/git/cairo" \
+#    #"pango"          "1.30.0" "https://github.com/GNOME/pango.git" \
+#    "i3"              "4.8"    "https://github.com/i3/i3.git" \
+#    "i3status"        "2.9"    "https://github.com/i3/i3status.git" \
+#    | xargs -n3 -P$threads -I{} bash -c "mt_checkout {} {} {}"
+#
+#check "test -d $srcpath/util-cursor" "Failed to check out xcb-util-cursor"
+#check "test -d $srcpath/yajl" "Failed to check out yajl"
+#check "test -d $srcpath/i3" "Failed to check out i3"
+#check "test -d $srcpath/i3status" "Failed to check out i3status"
 
 echo "Checking out xcb-util-cursor"
-check "git clone http://anongit.freedesktop.org/git/xcb/util-cursor.git --recursive" \
-    "failed to clone xcb-util-cursor source"
+check "git clone --branch 0.1.0 http://anongit.freedesktop.org/git/xcb/util-cursor.git --recursive" \
+    "failed to clone xcb-util-cursor 0.1.0 source"
 echo "Checking out yajl"
-check "git clone https://github.com/lloyd/yajl.git" \
-    "failed to clone yajl source"
-echo "Checking out cairo"
-check "git clone http://anongit.freedesktop.org/git/cairo" \
-    "failed to clone cairo source"
-echo "Checking out pango"
-check "git clone https://github.com/GNOME/pango.git" \
-    "failed to clone pango source"
+check "git clone --branch 2.0.4 https://github.com/lloyd/yajl.git" \
+    "failed to clone yajl 2.0.4 source"
+#echo "Checking out cairo"
+## Using 1.12.4 instead of 1.12.2 since it allows missing gtk-doc (skips documentation build instead of failing autogen)
+#check "git clone --branch 1.12.4 http://anongit.freedesktop.org/git/cairo" \
+#    "failed to clone cairo 1.12.4 source"
+#echo "Checking out pango"
+#check "git clone --branch 1.30.0 https://github.com/GNOME/pango.git" \
+#    "failed to clone pango 1.30.0 source"
 echo "Checking out i3"
-check "git clone https://github.com/i3/i3.git" \
-    "failed to clone i3 source"
+check "git clone --branch 4.8 https://github.com/i3/i3.git" \
+    "failed to clone i3 4.8 source"
 echo "Checking out i3status"
-check "git clone https://github.com/i3/i3status.git" \
-    "failed to clone i3status source"
-
-check "cd $rootpath" \
-    "failed to re-enter the root directory $rootpath"
+check "git clone --branch 2.9 https://github.com/i3/i3status.git" \
+    "failed to clone i3status 2.9 source"
 
 # Set up for compilation
 echo "Setting up for compilation..."
 
-# Point to .pc files from locally extracted rpms
+# Adjust environment variables for compilation to point to files from locally extracted rpms
+# PKG_CONFIG_PATH (.pc)
 while read -r dir; do
     PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$dir
 done < <(find $prepath -type d -name pkgconfig)
 export PKG_CONFIG_PATH
-# Same for .m4 files
+# ACLOCAL_PATH (.m4)
 while read -r dir; do
     ACLOCAL_PATH=${ACLOCAL_PATH:+$ACLOCAL_PATH:}$dir
 done < <(find $prepath -type d -name aclocal)
 export ACLOCAL_PATH
-# Some packages need executables from local rpm to build, add them to the PATH here
-export PATH="$PATH:$prepath/usr/bin"
-# Set include and library linkage paths
+# PATH
 while read -r dir; do
-    CFLAGS=${CFLAGS:+ }-I$dir
+    PATH=${PATH:+$PATH:}$dir
+done < <(find $prepath -type d -name bin)
+export PATH
+# CFLAGS
+while read -r dir; do
+    CFLAGS=${CFLAGS:+$CFLAGS }-I$dir
 done < <(find $prepath -type d -name include)
+# LDFLAGS
 while read -r dir; do
-    LDFLAGS=${LDFLAGS:+ }-I$dir
+    LDFLAGS=${LDFLAGS:+$LDFLAGS }-L$dir
 done < <(find $prepath -type d -name *lib*)
 
 if $DEBUG; then
@@ -202,8 +181,6 @@ echo "Compiling source..."
 echo "Compiling xcb-util-cursor"
 check "cd $srcpath/util-cursor" \
     "failed to enter xcb-util-cursor source directory"
-check "git checkout 0.1.0" \
-    "failed to check out xcb-util-cursor tag 0.1.0"
 check "./autogen.sh" \
     "failed to autogen xcb-util-cursor"
 check "./configure --prefix=$prepath/usr XCB{,_RENDER,_RENDERUTIL,_IMAGE}_CFLAGS=-I$prepath/usr/include XCB{,_RENDER,_RENDERUTIL,_IMAGE}_LIBS=-L$prepath/usr/lib64" \
@@ -217,8 +194,6 @@ check "make install" \
 echo "Compiling yajl"
 check "cd $srcpath/yajl" \
     "failed to enter yajl source directory"
-check "git checkout 2.0.4" \
-    "failed to check out yajl tag 2.0.4"
 check "./configure --prefix=$prepath/usr" \
     "failed to configure yajl"
 check "make" \
@@ -227,21 +202,17 @@ check "make install" \
     "failed to install yajl"
 
 # cairo
-echo "Compiling cairo"
-check "cd $srcpath/cairo" \
-    "failed to enter cairo source directory"
-# Using 1.12.4 instead of 1.12.2 since the former resolves missing gtkdocize causing autogen to fail
-# The latter version just skips building documentation if gtk-doc is missing
-check "git checkout 1.12.4" \
-    "failed to check out cairo tag 1.12.4"
-check "./autogen.sh" \
-    "failed to autogen cairo"
-check "./configure --prefix=$prepath/usr {xcb,png,FREETYPE,FONTCONFIG,pixman}_CFLAGS=-I$prepath/usr/include {xcb,png,FREETYPE,FONTCONFIG,pixman}_LIBS=\"-L$prepath/usr/lib64 -L$prepath/usr/lib\"" \
-    "failed to configure cairo"
-check "make" \
-    "failed to compile cairo"
-check "make install" \
-    "failed to install cairo"
+#echo "Compiling cairo"
+#check "cd $srcpath/cairo" \
+#    "failed to enter cairo source directory"
+#check "./autogen.sh" \
+#    "failed to autogen cairo"
+#check "./configure --prefix=$prepath/usr {xcb,png,FREETYPE,FONTCONFIG,pixman}_CFLAGS=-I$prepath/usr/include {xcb,png,FREETYPE,FONTCONFIG,pixman}_LIBS=\"-L$prepath/usr/lib64 -L$prepath/usr/lib\"" \
+#    "failed to configure cairo"
+#check "make" \
+#    "failed to compile cairo"
+#check "make install" \
+#    "failed to install cairo"
 
 # pango
 
