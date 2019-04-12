@@ -11,8 +11,8 @@ DEBUG=true
 function check () {
     if ! eval "$1" &>/dev/null; then
         echo "Error: $2" 1>&2
-        echo "The failed command: $1" 1>&2
-        echo "in directory: $PWD" 1>&2
+        echo "* The failed command: $1" 1>&2
+        echo "* in directory: $PWD" 1>&2
         exit 1
     fi
 }
@@ -29,13 +29,50 @@ function getdeps () {
     done | sort | uniq
 }
 
+o_PKG_CONFIG_PATH=$PKG_CONFIG_PATH
+o_ACLOCAL_PATH=$ACLOCAL_PATH
+o_PATH=$PATH
+o_CFLAGS=$CFLAGS
+o_LDFLAGS=$LDFLAGS
+function fixenv () {
+    # PKG_CONFIG_PATH
+    PKG_CONFIG_PATH=$o_PKG_CONFIG_PATH
+    while read -r dir; do
+        PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$dir
+    done < <(find $prepath -type d -name pkgconfig)
+    export PKG_CONFIG_PATH
+    # ACLOCAL_PATH
+    ACLOCAL_PATH=$o_ACLOCAL_PATH
+    while read -r dir; do
+        ACLOCAL_PATH=${ACLOCAL_PATH:+$ACLOCAL_PATH:}$dir
+    done < <(find $prepath -type d -name aclocal)
+    export ACLOCAL_PATH
+    # PATH
+    PATH=$o_PATH
+    while read -r dir; do
+        PATH=${PATH:+$PATH:}$dir
+    done < <(find $prepath -type d -name bin)
+    export PATH
+    # CFLAGS
+    CFLAGS=$o_CFLAGS
+    while read -r dir; do
+        CFLAGS=${CFLAGS:+$CFLAGS }-I$dir
+    done < <(find $prepath -type d -name include)
+    export CFLAGS
+    # LDFLAGS
+    LDFLAGS=$o_LDFLAGS
+    while read -r dir; do
+        LDFLAGS=${LDFLAGS:+$LDFLAGS }-L$dir
+    done < <(find $prepath -type d -name lib -o -name lib64 -o -name libexec)
+    export LDFLAGS
+}
+
 ### **main**
 
 baserepo="http://mirror.centos.org/centos/6/os/$(uname -i)"
 epelrepo="https://dl.fedoraproject.org/pub/epel/6/$(uname -i)"
 corepkgs="coreutils pkgconfig libtool make patch"
-basepkgs="pcre-devel xorg-x11-util-macros xcb-util-keysyms-devel xcb-util-wm-devel startup-notification-devel alsa-lib-devel wireless-tools-devel asciidoc"
-# xorg-x11-proto-devel xcb-util-renderutil-devel xcb-util-image-devel
+basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel" # asciidoc
 epelpkgs="libev-devel libconfuse-devel"
 
 echo "Checking system and build setup..."
@@ -138,47 +175,12 @@ echo "Checking out i3status"
 check "git clone --branch 2.9 https://github.com/i3/i3status.git" \
     "failed to clone i3status 2.9 source"
 
-# Set up for compilation
-echo "Setting up for compilation..."
-
-# Adjust environment variables for compilation to point to files from locally extracted rpms
-# PKG_CONFIG_PATH (.pc)
-while read -r dir; do
-    PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$dir
-done < <(find $prepath -type d -name pkgconfig)
-export PKG_CONFIG_PATH
-# ACLOCAL_PATH (.m4)
-while read -r dir; do
-    ACLOCAL_PATH=${ACLOCAL_PATH:+$ACLOCAL_PATH:}$dir
-done < <(find $prepath -type d -name aclocal)
-export ACLOCAL_PATH
-# PATH
-while read -r dir; do
-    PATH=${PATH:+$PATH:}$dir
-done < <(find $prepath -type d -name bin)
-export PATH
-# CFLAGS
-while read -r dir; do
-    CFLAGS=${CFLAGS:+$CFLAGS }-I$dir
-done < <(find $prepath -type d -name include)
-# LDFLAGS
-while read -r dir; do
-    LDFLAGS=${LDFLAGS:+$LDFLAGS }-L$dir
-done < <(find $prepath -type d -name *lib*)
-
-if $DEBUG; then
-    echo "PKG_CONFIG_PATH=$PKG_CONFIG_PATH" | tee $PREFIX.env
-    echo "ACLOCAL_PATH=$ACLOCAL_PATH" | tee -a $PREFIX.env
-    echo "PATH=$PATH" | tee -a $PREFIX.env
-    echo "CFLAGS=$CFLAGS" | tee -a $PREFIX.env
-    echo "LDFLAGS=$LDFLAGS" | tee -a $PREFIX.env
-fi
-
 # Compile source
 echo "Compiling source..."
 
 # xcb-util-cursor
 echo "Compiling xcb-util-cursor"
+fixenv # update build environment variables based on previously extracted/built packages
 check "cd $srcpath/util-cursor" \
     "failed to enter xcb-util-cursor source directory"
 check "./autogen.sh" \
@@ -192,17 +194,20 @@ check "make install" \
 
 # yajl
 echo "Compiling yajl"
+fixenv
 check "cd $srcpath/yajl" \
     "failed to enter yajl source directory"
-check "./configure --prefix=$prepath/usr" \
+check "./configure --prefix $prepath/usr" \
     "failed to configure yajl"
 check "make" \
     "failed to compile yajl"
 check "make install" \
     "failed to install yajl"
+fixenv
 
 # cairo
 #echo "Compiling cairo"
+#fixenv
 #check "cd $srcpath/cairo" \
 #    "failed to enter cairo source directory"
 #check "./autogen.sh" \
@@ -217,6 +222,7 @@ check "make install" \
 # pango
 
 # i3
+fixenv
 
 # i3status
 
