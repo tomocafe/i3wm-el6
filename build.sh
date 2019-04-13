@@ -84,7 +84,7 @@ function fixenv () {
 baserepo="http://mirror.centos.org/centos/6/os/$(uname -i)"
 epelrepo="https://dl.fedoraproject.org/pub/epel/6/$(uname -i)"
 corepkgs="coreutils pkgconfig libtool make patch"
-basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel" # asciidoc
+basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel asciidoc"
 epelpkgs="libev-devel libconfuse-devel"
 
 # Initialize log
@@ -213,8 +213,11 @@ check "git checkout 4.8" \
 fixenv
 check "sed -i -e '/PANGO/ s/^/#/' common.mk" \
     "failed to adjust configuration to disable pango"
-check "make PREFIX=$prepath/usr DEBUG=0 LIBSN_CFLAGS=-I$prepath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$prepath/usr/include/libev V=1 CFLAGS+=-Wl,--verbose" \
+check "make DEBUG=0 LIBSN_CFLAGS=-I$prepath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$prepath/usr/include/libev XCURSOR_LIBS+=\"-lxcb-image -lxcb-render-util -lxcb-cursor -lxcb\"" \
+# To debug link issues add: V=1 CFLAGS+=-Wl,--verbose
     "failed to compile i3"
+check "make PREFIX=$prepath/usr install" \
+    "failed to install i3"
 
 # i3status
 log "Compiling i3status"
@@ -223,4 +226,7 @@ check "cd $srcpath/i3status" \
 check "git checkout 2.9" \
     "failed to check out i3status 2.9"
 fixenv
-# TODO
+check "make" \
+    "failed to compile i3status"
+check "make PREFIX=$prepath/usr install" \
+    "failed to install i3status"
