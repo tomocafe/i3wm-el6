@@ -8,7 +8,10 @@ DEBUG=true
 
 ### **subroutines**
 
-$DEBUG && LOG=${LOG:-$PWD/$PREFIX.log} || LOG=/dev/null
+function log () {
+    echo "$@" | tee -a $LOG
+}
+
 function check () {
     echo "$1" >> $LOG
     if ! eval "$1" &>> $LOG; then
@@ -68,11 +71,11 @@ function fixenv () {
     done < <(find $prepath -type d -name lib -o -name lib64 -o -name libexec)
     export LDFLAGS
     if $DEBUG; then
-        echo "PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $PREFIX.env
-        echo "ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $PREFIX.env
-        echo "PATH=\"$PATH\"" | tee -a $PREFIX.env
-        echo "CFLAGS=\"$CFLAGS\"" | tee -a $PREFIX.env
-        echo "LDFLAGS=\"$LDFLAGS\"" | tee -a $PREFIX.env
+        log "PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $PREFIX.env
+        log "ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $PREFIX.env
+        log "PATH=\"$PATH\"" | tee -a $PREFIX.env
+        log "CFLAGS=\"$CFLAGS\"" | tee -a $PREFIX.env
+        log "LDFLAGS=\"$LDFLAGS\"" | tee -a $PREFIX.env
     fi
 }
 
@@ -84,7 +87,11 @@ corepkgs="coreutils pkgconfig libtool make patch"
 basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel" # asciidoc
 epelpkgs="libev-devel libconfuse-devel"
 
-echo "Checking system and build setup..."
+# Initialize log
+$DEBUG && LOG=${LOG:-$PWD/$PREFIX.log} || LOG=/dev/null
+echo "Build started at $(date)" > $LOG
+
+log "Checking system and build setup..."
 
 # Check required helper commands
 for cmd in rpm repoquery curl rpm2cpio git; do
@@ -104,66 +111,71 @@ check "curl -s --head --connect-timeout 5 $epelrepo | grep 'HTTP/1.[01] [23]..'"
 # Clean and create directories for source and build output
 for dir in "$SRCDIR" "$PREFIX"; do
     if [[ -d $dir ]]; then
-        echo "Removing existing $dir directory"
+        log "Removing existing $dir directory"
         check "rm -rf $dir" "failed to remove existing directory $dir"
     fi
     check "mkdir -p $dir" "failed to create directory $dir"
 done
 rootpath=$PWD
-srcpath=$(readlink -f $SRCDIR)
-prepath=$(readlink -f $PREFIX)
-
-if $DEBUG; then
-    echo "srcpath=$srcpath"
-    echo "prepath=$prepath"
-fi
+srcpath=$(readlink -f $SRCDIR); $DEBUG && log "srcpath=$srcpath"
+prepath=$(readlink -f $PREFIX); $DEBUG && log "prepath=$prepath"
 
 # Query dependencies of required packages recursively
 # Download rpm binaries of missing packages and extract them
-echo "Analyzing dependencies..."
+log "Analyzing dependencies..."
 check "cd $prepath" \
     "failed to enter PREFIX=$PREFIX directory ($prepath)"
 for pkg in $(getdeps $basepkgs); do
     pkgname=${pkg%%-[0-9]*}
     if ! rpm -q $pkgname &> /dev/null; then
-        echo "Fetching $pkg"
+        log "Fetching $pkg"
         check "curl -s $baserepo/Packages/$pkg.rpm | rpm2cpio | cpio -idv" "failed to download and extract $pkgname"
     elif $DEBUG; then
-        echo "Satisfied $pkg dependency"
+        log "System satisfies $pkg dependency"
     fi
 done
 for pkg in $(RQARGS="--repofrompath=epel,$epelrepo --repoid=epel" getdeps $epelpkgs); do
     pkgname=${pkg%%-[0-9]*}
     if ! rpm -q $pkgname &> /dev/null; then
-        echo "Fetching $pkg"
+        log "Fetching $pkg"
         check "curl -s $epelrepo/Packages/${pkgname:0:1}/$pkg.rpm | rpm2cpio | cpio -idv" "failed to download and extract $pkgname"
     elif $DEBUG; then
-        echo "Satisfied $pkg dependency"
+        log "System satisfies $pkg dependency"
     fi
 done
 
+# When locally extracting *-devel packages but using system installed base packages,
+# the symlink to libraries created by -devel will be broken. Correct them here.
+for broken in $(find $prepath -xtype l); do
+    fixed="$(dirname ${broken#$prepath})/$(readlink $broken)"
+    check "test -e $fixed" "Cannot locate system library $fixed"
+    unlink $broken
+    ln -s $fixed $broken
+    $DEBUG && log "Fixed symlink $broken -> $fixed"
+done
+
 # Check out source (rpms are not readily available for these packages on el6)
-echo "Checking out source..."
+log "Checking out source..."
 check "cd $srcpath" \
     "failed to enter SRCDIR=$SRCDIR directory ($srcpath)"
-echo "Checking out xcb-util-cursor"
+log "Checking out xcb-util-cursor"
 check "git clone http://anongit.freedesktop.org/git/xcb/util-cursor.git --recursive" \
     "failed to clone xcb-util-cursor source"
-echo "Checking out yajl"
+log "Checking out yajl"
 check "git clone https://github.com/lloyd/yajl.git" \
     "failed to clone yajl source"
-echo "Checking out i3"
+log "Checking out i3"
 check "git clone https://github.com/i3/i3.git" \
     "failed to clone i3 source"
-echo "Checking out i3status"
+log "Checking out i3status"
 check "git clone https://github.com/i3/i3status.git" \
     "failed to clone i3status source"
 
 # Compile source
-echo "Compiling source..."
+log "Compiling source..."
 
 # xcb-util-cursor
-echo "Compiling xcb-util-cursor"
+log "Compiling xcb-util-cursor"
 check "cd $srcpath/util-cursor" \
     "failed to enter xcb-util-cursor source directory"
 check "git checkout 0.1.0" \
@@ -179,7 +191,7 @@ check "make install" \
     "failed to install xcb-util-cursor"
 
 # yajl
-echo "Compiling yajl"
+log "Compiling yajl"
 check "cd $srcpath/yajl" \
     "failed to enter yajl source directory"
 check "git checkout 2.0.4" \
@@ -193,6 +205,7 @@ check "make install" \
     "failed to install yajl"
 
 # i3
+log "Compiling i3"
 check "cd $srcpath/i3" \
     "failed to enter i3 source directory"
 check "git checkout 4.8" \
@@ -200,13 +213,14 @@ check "git checkout 4.8" \
 fixenv
 check "sed -i -e '/PANGO/ s/^/#/' common.mk" \
     "failed to adjust configuration to disable pango"
-check "make PREFIX=$prepath/usr DEBUG=0 LIBSN_CFLAGS=-I$prepath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$prepath/usr/include/libev" \
+check "make PREFIX=$prepath/usr DEBUG=0 LIBSN_CFLAGS=-I$prepath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$prepath/usr/include/libev V=1 CFLAGS+=-Wl,--verbose" \
     "failed to compile i3"
 
 # i3status
+log "Compiling i3status"
 check "cd $srcpath/i3status" \
     "failed to enter i3status source directory"
 check "git checkout 2.9" \
     "failed to check out i3status 2.9"
 fixenv
-
+# TODO
