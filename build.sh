@@ -103,7 +103,7 @@ echo "Build started at $(date)" > $LOG
 log "Checking system and build setup..."
 
 # Check required helper commands
-for cmd in rpm repoquery curl rpm2cpio git; do
+for cmd in rpm repoquery curl rpm2cpio git ruby cmake; do
     check "command -v $cmd" "command $cmd not found"
 done
 
