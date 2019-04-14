@@ -67,6 +67,7 @@ function fixenv () {
     # LDFLAGS
     LDFLAGS=$o_LDFLAGS
     while read -r dir; do
+        ls $dir/*.so &> /dev/null || continue # ignore directories not containing shared library files
         LDFLAGS=${LDFLAGS:+$LDFLAGS }-L$dir
     done < <(find $prepath -type d -name lib -o -name lib64 -o -name libexec)
     export LDFLAGS
@@ -147,6 +148,7 @@ done
 # When locally extracting *-devel packages but using system installed base packages,
 # the symlink to libraries created by -devel will be broken. Correct them here.
 for broken in $(find $prepath -xtype l); do
+    [[ $(readlink $broken) =~ ^/ ]] && continue
     fixed="$(dirname ${broken#$prepath})/$(readlink $broken)"
     check "test -e $fixed" "Cannot locate system library $fixed"
     unlink $broken
@@ -214,7 +216,6 @@ fixenv
 check "sed -i -e '/PANGO/ s/^/#/' common.mk" \
     "failed to adjust configuration to disable pango"
 check "make DEBUG=0 LIBSN_CFLAGS=-I$prepath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$prepath/usr/include/libev XCURSOR_LIBS+=\"-lxcb-image -lxcb-render-util -lxcb-cursor -lxcb\"" \
-# To debug link issues add: V=1 CFLAGS+=-Wl,--verbose
     "failed to compile i3"
 check "make PREFIX=$prepath/usr install" \
     "failed to install i3"
@@ -230,3 +231,4 @@ check "make" \
     "failed to compile i3status"
 check "make PREFIX=$prepath/usr install" \
     "failed to install i3status"
+
