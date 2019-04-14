@@ -80,11 +80,11 @@ function fixenv () {
     done < <(find $bldpath $prepath -type d -name lib -o -name lib64 -o -name libexec)
     export LDFLAGS
     if $DEBUG; then
-        log "PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $BLDDIR.env
-        log "ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $BLDDIR.env
-        log "PATH=\"$PATH\"" | tee -a $BLDDIR.env
-        log "CFLAGS=\"$CFLAGS\"" | tee -a $BLDDIR.env
-        log "LDFLAGS=\"$LDFLAGS\"" | tee -a $BLDDIR.env
+        log "export PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $BLDDIR.env
+        log "export ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $BLDDIR.env
+        log "export PATH=\"$PATH\"" | tee -a $BLDDIR.env
+        log "export CFLAGS=\"$CFLAGS\"" | tee -a $BLDDIR.env
+        log "export LDFLAGS=\"$LDFLAGS\"" | tee -a $BLDDIR.env
     fi
 }
 
