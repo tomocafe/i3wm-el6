@@ -144,7 +144,7 @@ for pkg in $(getdeps $basepkgs); do
         log "System satisfies $pkg dependency"
     fi
 done
-for pkg in $(RQARGS="--repofrompath=epel,$epelrepo --repoid=epel" getdeps $epelpkgs); do
+for pkg in $(RQARGS="--repofrompath=epel-i3wm-el6,$epelrepo --repoid=epel-i3wm-el6" getdeps $epelpkgs); do
     pkgname=${pkg%%-[0-9]*}
     if ! rpm -q $pkgname &> /dev/null; then
         log "Fetching $pkg"
