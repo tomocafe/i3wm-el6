@@ -11,6 +11,8 @@ PREFIX="i3-4.8"
 SRCDIR="src"
 BLDDIR="build"
 DEBUG=false
+I3STATUS=true
+I3BLOCKS=true
 
 ### |subroutines|
 
@@ -179,6 +181,9 @@ check "git clone https://github.com/i3/i3.git" \
 log "Checking out i3status"
 check "git clone https://github.com/i3/i3status.git" \
     "failed to clone i3status source"
+$I3BLOCKS && log "Checking out i3blocks"
+$I3BLOCKS && check "git clone https://github.com/vivien/i3blocks.git" \
+    "failed to clone i3blocks source"
 
 # Compile source
 log "Compiling source..."
@@ -228,26 +233,47 @@ check "make PREFIX=$prepath install" \
     "failed to install i3"
 
 # i3status
-log "Compiling i3status"
-check "cd $srcpath/i3status" \
-    "failed to enter i3status source directory"
-check "git checkout 2.9" \
-    "failed to check out i3status 2.9"
-fixenv
-# TODO: fix manpage generation, a2x errors (remember to add back asciidoc to basepkgs)
-check "sed -i -e 's/manpage$//' Makefile" \
-    "failed to adjust configuration to disable manpage generation"
-check "sed -i -e '/install.*man/ s/^/#/' Makefile" \
-    "failed to adjust configuration to disable manpage installation"
-check "make" \
-    "failed to compile i3status"
-check "make PREFIX=$prepath install" \
-    "failed to install i3status"
+if $I3STATUS; then
+    log "Compiling i3status"
+    check "cd $srcpath/i3status" \
+        "failed to enter i3status source directory"
+    check "git checkout 2.9" \
+        "failed to check out i3status 2.9"
+    fixenv
+    # TODO: fix manpage generation, a2x errors (remember to add back asciidoc to basepkgs)
+    check "sed -i -e 's/manpage$//' Makefile" \
+        "failed to adjust configuration to disable manpage generation"
+    check "sed -i -e '/install.*man/ s/^/#/' Makefile" \
+        "failed to adjust configuration to disable manpage installation"
+    check "make" \
+        "failed to compile i3status"
+    check "make PREFIX=$prepath install" \
+        "failed to install i3status"
+fi
+
+# i3blocks
+if $I3BLOCKS; then
+    log "Compiling i3blocks"
+    check "cd $srcpath/i3blocks" \
+        "failed to enter i3blocks source directory"
+    check "git checkout 1.4" \
+        "failed to check out i3blocks 1.4"
+    fixenv
+    check "./autogen.sh" \
+        "failed to autogen i3blocks"
+    check "./configure --prefix=$prepath LIBS=-lrt" \
+        "failed to configure i3blocks"
+    check "make" \
+        "failed to compile i3blocks"
+    check "make install" \
+        "failed to install i3blocks"
+fi
 
 log "Packaging $PREFIX..."
 check "mkdir -p $prepath/lib" \
     "failed to create directory $prepath/lib"
-for ex in $prepath/bin/{i3,i3bar,i3status}; do
+for ex in $prepath/bin/{i3,i3bar,i3status,i3blocks}; do
+    [[ -e $ex ]] || continue
     while read -r line; do
         lib=${line%% => *}
         lib=${lib%%.so*}.so
@@ -259,11 +285,16 @@ for ex in $prepath/bin/{i3,i3bar,i3status}; do
     done < <(ldd $ex)
 done
 
-log "Cleaning up..."
-check "rm -rf $srcpath" \
-    "Failed to clean up source area"
-check "rm -rf $bldpath" \
-    "Failed to clean up intermediary build output area"
+if $DEBUG; then
+    log "Skipping cleanup of $srcpath for debug build"
+    log "Skipping cleanup of $bldpath for debug build"
+else
+    log "Cleaning up..."
+    check "rm -rf $srcpath" \
+        "Failed to clean up source area"
+    check "rm -rf $bldpath" \
+        "Failed to clean up intermediary build output area"
+fi
 
 log "Done!"
 

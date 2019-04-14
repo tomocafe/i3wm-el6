@@ -2,7 +2,7 @@
 
 This is a script to build the [i3 window manager](https://i3wm.org) for CentOS / RedHat 6.x (el6) in user space (no root required).
 
-Since el6 is old and missing dependencies required by recent i3wm versions, this script builds i3 v4.8 (c. 2015) without pango support. Remember to refer only to the [v4.8 i3wm user guide](https://i3wm.org/docs/4.8/userguide.html) and not the current latest version on the main site.
+Since el6 is old and missing dependencies required by recent i3wm versions, this script builds i3 v4.8 (c. 2014) without pango support. Remember to refer only to the [v4.8 i3wm user guide](https://i3wm.org/docs/4.8/userguide.html) and not the current latest version on the main site.
 
 ## Build instructions
 
@@ -15,9 +15,11 @@ By default, the binaries will be placed in a directory named `i3-4.8`. After suc
     export PATH=${PATH:+$PATH:}$(readlink -f i3-4.8/bin)
     export LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$(readlink -f i3-4.8/lib)
 
-The first few lines of the `build.sh` script are configurable parameters, including `PREFIX` which controls the name of the final output directory. The `SRCDIR` and `BLDDIR` are intermediary directories that are cleaned up at the end.
+The first section of the `build.sh` script are configurable parameters, including `PREFIX` which controls the name of the final output directory. The `SRCDIR` and `BLDDIR` are intermediary directories that are cleaned up at the end.
 
 If you encounter any errors that require debugging, turn on `DEBUG=true` and inspect the `$BLDDIR.log` file for details on what went wrong.
+
+The script can build two status line generators: [`i3status`](https://github.com/i3/i3status) and [`i3blocks`](https://github.com/vivien/i3blocks). By default, both are built; you can control which ones are built by setting the `I3STATUS` and `I3BLOCKS` variables.
 
 ## Pseudocode
 
