@@ -227,7 +227,7 @@ check "git checkout 4.8" \
 fixenv
 check "sed -i -e '/PANGO/ s/^/#/' common.mk" \
     "failed to adjust configuration to disable pango"
-check "make DEBUG=0 LIBSN_CFLAGS=-I$bldpath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$bldpath/usr/include/libev XCURSOR_LIBS+=\"-lxcb-image -lxcb-render-util -lxcb-cursor -lxcb\"" \
+check "make DEBUG=0 LIBSN_CFLAGS+=-I{$bldpath,}/usr/include/startup-notification-1.0 LIBEV_CFLAGS+=-I${bldpath,}/usr/include/libev XCURSOR_LIBS+=\"-lxcb-image -lxcb-render-util -lxcb-cursor -lxcb\"" \
     "failed to compile i3"
 check "make PREFIX=$prepath install" \
     "failed to install i3"
