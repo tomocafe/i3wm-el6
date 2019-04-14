@@ -94,7 +94,7 @@ baserepo="http://mirror.centos.org/centos/6/os/$(uname -i)"
 epelrepo="https://dl.fedoraproject.org/pub/epel/6/$(uname -i)"
 corepkgs="coreutils pkgconfig libtool make patch"
 basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel"
-epelpkgs="libev-devel libconfuse-devel"
+epelpkgs="libev-devel libconfuse-devel dmenu"
 
 # Initialize log
 $DEBUG && LOG=${LOG:-$PWD/$BLDDIR.log} || LOG=/dev/null
@@ -286,6 +286,9 @@ for ex in $prepath/bin/{i3,i3bar,i3status,i3blocks}; do
         done
     done < <(ldd $ex)
 done
+# Copy dmenu
+check "cp $bldpath/usr/bin/dmenu* $prepath/bin" \
+    "failed to copy dmenu"
 
 if $DEBUG; then
     log "Skipping cleanup of $srcpath for debug build"
