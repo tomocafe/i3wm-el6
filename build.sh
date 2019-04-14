@@ -1,12 +1,18 @@
 #!/bin/bash
 
-### **parameters**
+# tomocafe/i3wm-el6
+# build.sh
+# 
+# See README.md for documentation
 
-PREFIX="build"
+### |parameters|
+
+PREFIX="i3-4.8"
 SRCDIR="src"
+BLDDIR="build"
 DEBUG=false
 
-### **subroutines**
+### |subroutines|
 
 function log () {
     echo "$@" | tee -a $LOG
@@ -44,52 +50,52 @@ function fixenv () {
     PKG_CONFIG_PATH=$o_PKG_CONFIG_PATH
     while read -r dir; do
         PKG_CONFIG_PATH=${PKG_CONFIG_PATH:+$PKG_CONFIG_PATH:}$dir
-    done < <(find $prepath -type d -name pkgconfig)
+    done < <(find $bldpath $prepath -type d -name pkgconfig)
     export PKG_CONFIG_PATH
     # ACLOCAL_PATH
     ACLOCAL_PATH=$o_ACLOCAL_PATH
     while read -r dir; do
         ACLOCAL_PATH=${ACLOCAL_PATH:+$ACLOCAL_PATH:}$dir
-    done < <(find $prepath -type d -name aclocal)
+    done < <(find $bldpath $prepath -type d -name aclocal)
     export ACLOCAL_PATH
     # PATH
     PATH=$o_PATH
     while read -r dir; do
         PATH=${PATH:+$PATH:}$dir
-    done < <(find $prepath -type d -name bin)
+    done < <(find $bldpath $prepath -type d -name bin)
     export PATH
     # CFLAGS
     CFLAGS=$o_CFLAGS
     while read -r dir; do
         CFLAGS=${CFLAGS:+$CFLAGS }-I$dir
-    done < <(find $prepath -type d -name include)
+    done < <(find $bldpath $prepath -type d -name include)
     export CFLAGS
     # LDFLAGS
     LDFLAGS=$o_LDFLAGS
     while read -r dir; do
         ls $dir/*.so &> /dev/null || continue # ignore directories not containing shared library files
         LDFLAGS=${LDFLAGS:+$LDFLAGS }-L$dir
-    done < <(find $prepath -type d -name lib -o -name lib64 -o -name libexec)
+    done < <(find $bldpath $prepath -type d -name lib -o -name lib64 -o -name libexec)
     export LDFLAGS
     if $DEBUG; then
-        log "PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $PREFIX.env
-        log "ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $PREFIX.env
-        log "PATH=\"$PATH\"" | tee -a $PREFIX.env
-        log "CFLAGS=\"$CFLAGS\"" | tee -a $PREFIX.env
-        log "LDFLAGS=\"$LDFLAGS\"" | tee -a $PREFIX.env
+        log "PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $BLDDIR.env
+        log "ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $BLDDIR.env
+        log "PATH=\"$PATH\"" | tee -a $BLDDIR.env
+        log "CFLAGS=\"$CFLAGS\"" | tee -a $BLDDIR.env
+        log "LDFLAGS=\"$LDFLAGS\"" | tee -a $BLDDIR.env
     fi
 }
 
-### **main**
+### |main|
 
 baserepo="http://mirror.centos.org/centos/6/os/$(uname -i)"
 epelrepo="https://dl.fedoraproject.org/pub/epel/6/$(uname -i)"
 corepkgs="coreutils pkgconfig libtool make patch"
-basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel" # asciidoc
+basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel"
 epelpkgs="libev-devel libconfuse-devel"
 
 # Initialize log
-$DEBUG && LOG=${LOG:-$PWD/$PREFIX.log} || LOG=/dev/null
+$DEBUG && LOG=${LOG:-$PWD/$BLDDIR.log} || LOG=/dev/null
 echo "Build started at $(date)" > $LOG
 
 log "Checking system and build setup..."
@@ -110,7 +116,7 @@ check "curl -s --head --connect-timeout 5 $epelrepo | grep 'HTTP/1.[01] [23]..'"
     "no access to EPEL rpm repository"
 
 # Clean and create directories for source and build output
-for dir in "$SRCDIR" "$PREFIX"; do
+for dir in "$SRCDIR" "$BLDDIR" "$PREFIX"; do
     if [[ -d $dir ]]; then
         log "Removing existing $dir directory"
         check "rm -rf $dir" "failed to remove existing directory $dir"
@@ -119,13 +125,14 @@ for dir in "$SRCDIR" "$PREFIX"; do
 done
 rootpath=$PWD
 srcpath=$(readlink -f $SRCDIR); $DEBUG && log "srcpath=$srcpath"
+bldpath=$(readlink -f $BLDDIR); $DEBUG && log "bldpath=$bldpath"
 prepath=$(readlink -f $PREFIX); $DEBUG && log "prepath=$prepath"
 
 # Query dependencies of required packages recursively
 # Download rpm binaries of missing packages and extract them
 log "Analyzing dependencies..."
-check "cd $prepath" \
-    "failed to enter PREFIX=$PREFIX directory ($prepath)"
+check "cd $bldpath" \
+    "failed to enter BLDDIR=$BLDDIR directory ($bldpath)"
 for pkg in $(getdeps $basepkgs); do
     pkgname=${pkg%%-[0-9]*}
     if ! rpm -q $pkgname &> /dev/null; then
@@ -147,9 +154,9 @@ done
 
 # When locally extracting *-devel packages but using system installed base packages,
 # the symlink to libraries created by -devel will be broken. Correct them here.
-for broken in $(find $prepath -xtype l); do
+for broken in $(find $bldpath -xtype l); do
     [[ $(readlink $broken) =~ ^/ ]] && continue
-    fixed="$(dirname ${broken#$prepath})/$(readlink $broken)"
+    fixed="$(dirname ${broken#$bldpath})/$(readlink $broken)"
     check "test -e $fixed" "Cannot locate system library $fixed"
     unlink $broken
     ln -s $fixed $broken
@@ -185,7 +192,7 @@ check "git checkout 0.1.0" \
 fixenv # update build environment variables based on previously extracted/built packages
 check "./autogen.sh" \
     "failed to autogen xcb-util-cursor"
-check "./configure --prefix=$prepath/usr XCB{,_RENDER,_RENDERUTIL,_IMAGE}_CFLAGS=-I$prepath/usr/include XCB{,_RENDER,_RENDERUTIL,_IMAGE}_LIBS=-L$prepath/usr/lib64" \
+check "./configure --prefix=$bldpath/usr XCB{,_RENDER,_RENDERUTIL,_IMAGE}_CFLAGS=-I$bldpath/usr/include XCB{,_RENDER,_RENDERUTIL,_IMAGE}_LIBS=-L$bldpath/usr/lib64" \
     "failed to configure xcb-util-cursor"
 check "make" \
     "failed to compile xcb-util-cursor"
@@ -199,7 +206,7 @@ check "cd $srcpath/yajl" \
 check "git checkout 2.0.4" \
     "failed to check out yajl 2.0.4"
 fixenv
-check "./configure --prefix $prepath/usr" \
+check "./configure --prefix $bldpath/usr" \
     "failed to configure yajl"
 check "make" \
     "failed to compile yajl"
@@ -215,9 +222,9 @@ check "git checkout 4.8" \
 fixenv
 check "sed -i -e '/PANGO/ s/^/#/' common.mk" \
     "failed to adjust configuration to disable pango"
-check "make DEBUG=0 LIBSN_CFLAGS=-I$prepath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$prepath/usr/include/libev XCURSOR_LIBS+=\"-lxcb-image -lxcb-render-util -lxcb-cursor -lxcb\"" \
+check "make DEBUG=0 LIBSN_CFLAGS=-I$bldpath/usr/include/startup-notification-1.0 LIBEV_CFLAGS=-I$bldpath/usr/include/libev XCURSOR_LIBS+=\"-lxcb-image -lxcb-render-util -lxcb-cursor -lxcb\"" \
     "failed to compile i3"
-check "make PREFIX=$prepath/usr install" \
+check "make PREFIX=$prepath install" \
     "failed to install i3"
 
 # i3status
@@ -234,6 +241,29 @@ check "sed -i -e '/install.*man/ s/^/#/' Makefile" \
     "failed to adjust configuration to disable manpage installation"
 check "make" \
     "failed to compile i3status"
-check "make PREFIX=$prepath/usr install" \
+check "make PREFIX=$prepath install" \
     "failed to install i3status"
+
+log "Packaging $PREFIX..."
+check "mkdir -p $prepath/lib" \
+    "failed to create directory $prepath/lib"
+for ex in $prepath/bin/{i3,i3bar,i3status}; do
+    while read -r line; do
+        lib=${line%% => *}
+        lib=${lib%%.so*}.so
+        [[ $lib =~ ^/ ]] && continue
+        for bldlib in $(find $bldpath -name $lib*); do
+            check "cp -d $bldlib $prepath/lib" \
+                "failed to copy library from intermediary build output area to package area"
+        done
+    done < <(ldd $ex)
+done
+
+log "Cleaning up..."
+check "rm -rf $srcpath" \
+    "Failed to clean up source area"
+check "rm -rf $bldpath" \
+    "Failed to clean up intermediary build output area"
+
+log "Done!"
 
