@@ -256,8 +256,10 @@ if $I3BLOCKS; then
     log "Compiling i3blocks"
     check "cd $srcpath/i3blocks" \
         "failed to enter i3blocks source directory"
-    check "git checkout 1.4" \
-        "failed to check out i3blocks 1.4"
+    # Last known working checkout, feel free to modify
+    # Prefer newer build setup compared to latest release at time of writing (1.4)
+    check "git checkout ec050e79ad8489a6f8deb37d4c20ab10729c25c3" \
+        "failed to check out i3blocks"
     fixenv
     check "./autogen.sh" \
         "failed to autogen i3blocks"
