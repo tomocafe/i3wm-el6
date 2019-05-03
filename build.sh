@@ -7,6 +7,7 @@
 
 ### |parameters|
 
+# If you change these, you may want to update .gitignore
 PREFIX="i3-4.8"
 SRCDIR="src"
 BLDDIR="build"
