@@ -287,7 +287,9 @@ for ex in $prepath/bin/{i3,i3bar,i3status,i3blocks}; do
         done
     done < <(ldd $ex)
 done
-# Copy dmenu
+# Patch and copy dmenu
+check "sed -i -e 's/test -x \"$file\"/test -f \"$file\" \&\& test -x \"$file\"/' $bldpath/usr/bin/dmenu_path" \
+    "failed to patch dmenu"
 check "cp $bldpath/usr/bin/dmenu* $prepath/bin" \
     "failed to copy dmenu"
 
