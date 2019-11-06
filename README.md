@@ -21,6 +21,8 @@ If you encounter any errors that require debugging, turn on `DEBUG=true` and ins
 
 The script can build two status line generators: [`i3status`](https://github.com/i3/i3status) and [`i3blocks`](https://github.com/vivien/i3blocks). By default, both are built; you can control which ones are built by setting the `I3STATUS` and `I3BLOCKS` variables.
 
+By default, the [`dunst`](https://github.com/dunst-project) notification daemon (v1.3.2) is also built. You can disable this by setting the `DUNST` variable to `false`.
+
 ## Pseudocode
 
 In essence, the script is doing this:
