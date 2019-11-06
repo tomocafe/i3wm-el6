@@ -1,0 +1,70 @@
+--- screen.c.orig	2019-11-05 14:33:35.913714000 -0800
++++ screen.c	2019-11-05 18:31:49.990258000 -0800
+@@ -5,8 +5,10 @@
+ #include <X11/Xlib.h>
+ #include <X11/Xresource.h>
+ #include <X11/extensions/Xinerama.h>
++#ifndef FORCE_XINERAMA
+ #include <X11/extensions/Xrandr.h>
+ #include <X11/extensions/randr.h>
++#endif
+ #include <assert.h>
+ #include <glib.h>
+ #include <locale.h>
+@@ -25,8 +27,10 @@
+ 
+ int randr_event_base = 0;
+ 
++#ifndef FORCE_XINERAMA
+ static int randr_major_version = 0;
+ static int randr_minor_version = 0;
++#endif
+ 
+ void randr_init();
+ void randr_update();
+@@ -66,12 +70,16 @@
+ 
+ void init_screens()
+ {
++#ifdef FORCE_XINERAMA
++        xinerama_update();
++#else
+         if (!settings.force_xinerama) {
+                 randr_init();
+                 randr_update();
+         } else {
+                 xinerama_update();
+         }
++#endif
+ }
+ 
+ void alloc_screen_ar(int n)
+@@ -86,6 +94,7 @@
+         screens_len = n;
+ }
+ 
++#ifndef FORCE_XINERAMA
+ void randr_init()
+ {
+         int randr_error_base = 0;
+@@ -132,6 +141,7 @@
+ 
+         XRRFreeMonitors(m);
+ }
++#endif
+ 
+ static int autodetect_dpi(screen_info *scr)
+ {
+@@ -140,8 +150,12 @@
+ 
+ void screen_check_event(XEvent event)
+ {
++#ifdef FORCE_XINERAMA
++        return;
++#else
+         if (event.type == randr_event_base + RRScreenChangeNotify)
+                 randr_update();
++#endif
+ }
+ 
+ void xinerama_update()

@@ -1,0 +1,79 @@
+--- settings.c.orig	2019-11-05 15:12:47.204907000 -0800
++++ settings.c	2019-11-05 18:38:07.118375000 -0800
+@@ -5,10 +5,6 @@
+ #include <glib.h>
+ #include <stdio.h>
+ #include <string.h>
+-#ifndef STATIC_CONFIG
+-#include <basedir.h>
+-#include <basedir_fs.h>
+-#endif
+ 
+ #include "rules.h" // put before config.h to fix missing include
+ #include "config.h"
+@@ -68,15 +64,35 @@
+         return ret;
+ }
+ 
++static FILE *xdg_config(const char *filename)
++{
++        const gchar * const * systemdirs = g_get_system_config_dirs();
++        const gchar * userdir = g_get_user_config_dir();
++
++        FILE *f;
++        char *path;
++
++        path = g_strconcat(userdir, filename, NULL);
++        f = fopen(path, "r");
++        g_free(path);
++
++        for (const gchar * const *d = systemdirs;
++             !f && *d;
++             d++) {
++                path = g_strconcat(*d, filename, NULL);
++                f = fopen(path, "r");
++                g_free(path);
++        }
++
++        return f;
++}
++
+ void load_settings(char *cmdline_config_path)
+ {
+ 
+ #ifndef STATIC_CONFIG
+-        xdgHandle xdg;
+         FILE *config_file = NULL;
+ 
+-        xdgInitHandle(&xdg);
+-
+         if (cmdline_config_path != NULL) {
+                 if (0 == strcmp(cmdline_config_path, "-")) {
+                         config_file = stdin;
+@@ -92,15 +108,14 @@
+                 }
+         }
+         if (config_file == NULL) {
+-                config_file = xdgConfigOpen("dunst/dunstrc", "r", &xdg);
++                config_file = xdg_config("dunst/dunstrc");
+         }
+         if (config_file == NULL) {
+                 /* Fall back to just "dunstrc", which was used before 2013-06-23
+                  * (before v0.2). */
+-                config_file = xdgConfigOpen("dunstrc", "r", &xdg);
++                config_file = xdg_config("dunstrc");
+                 if (config_file == NULL) {
+-                        puts("no dunstrc found -> skipping\n");
+-                        xdgWipeHandle(&xdg);
++                        fprintf(stderr, "Warning: no dunstrc found.");
+                 }
+         }
+ 
+@@ -680,7 +695,6 @@
+         if (config_file) {
+                 fclose(config_file);
+                 free_ini();
+-                xdgWipeHandle(&xdg);
+         }
+ #endif
+ }

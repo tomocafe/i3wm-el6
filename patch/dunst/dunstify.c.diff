@@ -1,0 +1,11 @@
+--- dunstify.c.orig	2019-11-06 08:43:25.152123000 -0800
++++ dunstify.c	2019-11-06 08:43:43.775851000 -0800
+@@ -265,7 +265,7 @@
+     }
+ 
+     NotifyNotification *n;
+-    n = notify_notification_new(summary, body, icon);
++    n = notify_notification_new(summary, body, icon, NULL);
+     notify_notification_set_timeout(n, timeout);
+     notify_notification_set_urgency(n, urgency);
+ 

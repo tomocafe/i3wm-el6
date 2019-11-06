@@ -1,0 +1,20 @@
+--- config.mk.orig	2019-11-05 15:25:05.721245000 -0800
++++ config.mk	2019-11-05 15:25:10.112184000 -0800
+@@ -26,16 +26,9 @@
+                     pangocairo \
+                     x11 \
+                     xinerama \
+-                    "xrandr >= 1.5" \
++                    xrandr \
+                     xscrnsaver
+ 
+-# check if we need libxdg-basedir
+-ifeq (,$(findstring STATIC_CONFIG,$(CFLAGS)))
+-	pkg_config_packs += libxdg-basedir
+-else
+-$(warning STATIC_CONFIG is deprecated behavior. It will get removed in future releases)
+-endif
+-
+ # dunstify also needs libnotify
+ ifneq (,$(findstring dunstify,${MAKECMDGOALS}))
+ 	pkg_config_packs += libnotify

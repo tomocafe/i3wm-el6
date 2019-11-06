@@ -14,6 +14,7 @@ BLDDIR="build"
 DEBUG=false
 I3STATUS=true
 I3BLOCKS=true
+DUNST=true
 
 ### |subroutines|
 
@@ -48,6 +49,7 @@ o_ACLOCAL_PATH=$ACLOCAL_PATH
 o_PATH=$PATH
 o_CFLAGS=$CFLAGS
 o_LDFLAGS=$LDFLAGS
+o_LD_LIBRARY_PATH=$LD_LIBRARY_PATH
 function fixenv () {
     # PKG_CONFIG_PATH
     PKG_CONFIG_PATH=$o_PKG_CONFIG_PATH
@@ -61,6 +63,8 @@ function fixenv () {
         ACLOCAL_PATH=${ACLOCAL_PATH:+$ACLOCAL_PATH:}$dir
     done < <(find $bldpath $prepath -type d -name aclocal)
     export ACLOCAL_PATH
+    # ACLOCAL (for compatibility)
+    export ACLOCAL="aclocal${ACLOCAL_PATH:+ -I}${ACLOCAL_PATH//:/ -I}"
     # PATH
     PATH=$o_PATH
     while read -r dir; do
@@ -75,17 +79,21 @@ function fixenv () {
     export CFLAGS
     # LDFLAGS
     LDFLAGS=$o_LDFLAGS
+    LD_LIBRARY_PATH=$o_LD_LIBRARY_PATH
     while read -r dir; do
         ls $dir/*.so &> /dev/null || continue # ignore directories not containing shared library files
         LDFLAGS=${LDFLAGS:+$LDFLAGS }-L$dir
+        LD_LIBRARY_PATH=${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}$dir
     done < <(find $bldpath $prepath -type d -name lib -o -name lib64 -o -name libexec)
     export LDFLAGS
     if $DEBUG; then
         log "export PKG_CONFIG_PATH=\"$PKG_CONFIG_PATH\"" | tee $BLDDIR.env
         log "export ACLOCAL_PATH=\"$ACLOCAL_PATH\"" | tee -a $BLDDIR.env
+        log "export ACLOCAL=\"$ACLOCAL\"" | tee -a $BLDDIR.env
         log "export PATH=\"$PATH\"" | tee -a $BLDDIR.env
         log "export CFLAGS=\"$CFLAGS\"" | tee -a $BLDDIR.env
         log "export LDFLAGS=\"$LDFLAGS\"" | tee -a $BLDDIR.env
+        log "export LD_LIBRARY_PATH=\"$LD_LIBRARY_PATH\"" | tee -a $BLDDIR.env
     fi
 }
 
@@ -94,7 +102,8 @@ function fixenv () {
 baserepo="http://mirror.centos.org/centos/6/os/$(uname -i)"
 epelrepo="https://dl.fedoraproject.org/pub/epel/6/$(uname -i)"
 corepkgs="coreutils pkgconfig libtool make patch"
-basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel"
+basepkgs="pcre-devel gperf xorg-x11-proto-devel xorg-x11-util-macros xcb-util-devel xcb-util-keysyms-devel xcb-util-wm-devel xcb-util-renderutil-devel xcb-util-image-devel startup-notification-devel alsa-lib-devel wireless-tools-devel ruby cmake"
+$DUNST && basepkgs+=" libXScrnSaver-devel libffi-devel gdk-pixbuf2-devel cairo-devel libXinerama-devel"
 epelpkgs="libev-devel libconfuse-devel dmenu"
 
 # Initialize log
@@ -104,7 +113,7 @@ echo "Build started at $(date)" > $LOG
 log "Checking system and build setup..."
 
 # Check required helper commands
-for cmd in rpm repoquery curl rpm2cpio git ruby cmake; do
+for cmd in rpm repoquery curl rpm2cpio git; do
     check "command -v $cmd" "command $cmd not found"
 done
 
@@ -179,12 +188,24 @@ check "git clone https://github.com/lloyd/yajl.git" \
 log "Checking out i3"
 check "git clone https://github.com/i3/i3.git" \
     "failed to clone i3 source"
-log "Checking out i3status"
-check "git clone https://github.com/i3/i3status.git" \
-    "failed to clone i3status source"
-$I3BLOCKS && log "Checking out i3blocks"
-$I3BLOCKS && check "git clone https://github.com/vivien/i3blocks.git" \
-    "failed to clone i3blocks source"
+if $I3STATUS; then
+    log "Checking out i3status"
+    check "git clone https://github.com/i3/i3status.git" \
+        "failed to clone i3status source"
+fi
+if $I3BLOCKS; then
+    log "Checking out i3blocks"
+    check "git clone https://github.com/vivien/i3blocks.git" \
+        "failed to clone i3blocks source"
+fi
+if $DUNST; then
+    log "Checking out glib2"
+    check "git clone https://github.com/GNOME/glib.git" \
+        "failed to clone glib2 source"
+    log "Checking out dunst"
+    check "git clone https://github.com/dunst-project/dunst.git" \
+        "failed to clone dunst source"
+fi
 
 # Compile source
 log "Compiling source..."
@@ -212,6 +233,7 @@ check "cd $srcpath/yajl" \
 check "git checkout 2.0.4" \
     "failed to check out yajl 2.0.4"
 fixenv
+[[ -d $bldpath/usr/lib/ruby/1.8 ]] && export RUBYLIB="$bldpath/usr/lib/ruby/1.8"
 check "./configure --prefix $bldpath/usr" \
     "failed to configure yajl"
 check "make" \
@@ -272,10 +294,51 @@ if $I3BLOCKS; then
         "failed to install i3blocks"
 fi
 
+# dunst
+if $DUNST; then
+    # glib2 2.44.1
+    log "Compiling glib2"
+    check "cd $srcpath/glib" \
+        "failed to enter glib2 source directory"
+    check "git checkout 2.36.4" \
+        "failed to check out glib2 2.36.4"
+    fixenv
+    check "./autogen.sh" \
+        "failed to autogen glib2"
+    check "./configure --prefix=$bldpath/usr" \
+        "failed to configure glib2"
+    check "make" \
+        "failed to compile glib2"
+    check "make install" \
+        "failed to install glib2"
+
+    # dunst 1.3.2
+    log "Compiling dunst"
+    check "cd $srcpath/dunst" \
+        "failed to enter dunst source directory"
+    check "git checkout v1.3.2" \
+        "failed to check out dunst 1.3.2"
+    fixenv
+    check "patch config.mk < ../../patch/dunst/config.mk.diff" \
+        "failed to patch config.mk"
+    check "patch src/x11/screen.c < ../../patch/dunst/screen.c.diff" \
+        "failed to patch src/x11/screen.c"
+    check "patch src/settings.c < ../../patch/dunst/settings.c.diff" \
+        "failed to patch src/settings.c"
+    check "patch dunstify.c < ../../patch/dunst/dunstify.c.diff" \
+        "failed to patch dunstify.c"
+    check "CPPFLAGS=-DFORCE_XINERAMA make" \
+        "failed to compile dunst"
+    check "make dunstify" \
+        "failed to compile dunstify"
+    check "make PREFIX=$prepath SERVICEDIR_DBUS=$prepath/share/dbus-1/services install" \
+        "failed to install dunst"
+fi
+
 log "Packaging $PREFIX..."
 check "mkdir -p $prepath/lib" \
     "failed to create directory $prepath/lib"
-for ex in $prepath/bin/{i3,i3bar,i3status,i3blocks}; do
+for ex in $prepath/bin/{i3,i3bar,i3status,i3blocks,dunst,dunstify}; do
     [[ -e $ex ]] || continue
     while read -r line; do
         lib=${line%% => *}
@@ -292,6 +355,9 @@ check "sed -i -e 's/test -x \"$file\"/test -f \"$file\" \&\& test -x \"$file\"/'
     "failed to patch dmenu"
 check "cp $bldpath/usr/bin/dmenu* $prepath/bin" \
     "failed to copy dmenu"
+# Copy dunstify
+check "cp $bldpath/src/dunst/dunstify $prepath/bin" \
+    "failed to copy dunstify"
 
 if $DEBUG; then
     log "Skipping cleanup of $srcpath for debug build"
